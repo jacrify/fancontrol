@@ -33,8 +33,8 @@ int pot = A4; //pot for control
 
 int potMax = 1024; //max pot value
 
-int vel = 0; 
-int newVel = 0;
+int vel = 0;
+
 const int MaxChars = 10;
 char strValue[MaxChars + 1];
 int index = 0;
@@ -46,8 +46,8 @@ int minVelSeen = 0;
 //Start with some overhead on min and max
 int maxMultiplier = 2;
 int minDivisor = 2;
-int minAirSpeed=40;//in case they land
-  
+int minAirSpeed = 40; //in case they land
+
 //until overhead is hit, shrink the max and min each cycle
 int cycleShrinkDivisor = 20; //1% per cycle=100
 int cycleCounter = 0;
@@ -65,6 +65,13 @@ int fanpwmmax = 799; //based on timer voodoo. Reduce to drop fan max, or just us
 int fanvelraw = 0; //raw scaled vaue (0-799) before pot scaling
 int fanveladjusted = 0; //actual timer value after pot scaling
 
+//Ramp the fan up step by step to prevent jumping around
+
+int fanactual = 0;
+int fanstep = 1;
+
+int timestep = 1; //ramp up only every x milli
+int lastFanSet = 0;
 
 
 
@@ -154,6 +161,7 @@ void setup()
   pinMode(lPWM, OUTPUT);
   pinMode(swi, INPUT_PULLUP);
 
+  lastFanSet = millis();
   OCR1B = 0; //D10- fan off
 
 }
@@ -254,7 +262,7 @@ void loop()
               Serial.print("Cycle- shrinking top limit maxVelSeen\n");
               maxVelSeen = maxVelSeen - (((minVelSeen + maxVelSeen) / 2) / cycleShrinkDivisor);
             }
-            if (!minVelHit||  vel <=minAirSpeed) {
+            if (!minVelHit ||  vel <= minAirSpeed) {
               minVelSeen = minVelSeen + (((minVelSeen + maxVelSeen) / 2) / cycleShrinkDivisor);
             }
           }
@@ -296,7 +304,23 @@ void loop()
 
 
     }
-    OCR1B = fanveladjusted;
+
+
+    int now = millis();
+    if ((now - lastFanSet) > timestep) {
+      lastFanSet = now;
+      if (fanveladjusted > fanactual) {
+        fanactual += fanstep;
+        OCR1B = fanactual;
+      } else {
+        if (fanveladjusted < fanactual) {
+          fanactual -= fanstep;
+          OCR1B = fanactual;
+        }
+      }
+    }
+
+    
     /*
       Serial.print(vel);
           Serial.print(',');
